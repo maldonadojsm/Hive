@@ -1,7 +1,7 @@
 {
   "name": "hive-mvp",
   "version": "0.1.0",
-  "description": "MVP demonstrating Hive",
+  "description": "Hive Demonstration",
   "keywords": [
     "rest",
     "hateoas",
@@ -9,12 +9,12 @@
     "data",
     "react"
   ],
-  "author": "Juan Maldonado",
+  "author": "Juan Sebastian Maldonado",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/spring-guides/tut-react-and-spring-data-rest/issues"
+    "url": "https://github.com/maldonadojsm/Hive-MVP/issues"
   },
-  "homepage": "https://github.com/spring-guides/tut-react-and-spring-data-rest",
+  "homepage": "https://github.com/maldonadojsm/Hive-MVP",
   "dependencies": {
     "react": "^16.5.2",
     "react-dom": "^16.5.2",
