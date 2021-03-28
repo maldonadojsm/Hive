@@ -18,6 +18,8 @@ public class DatabaseLoader implements CommandLineRunner {
     public void run(String... strings) throws Exception {
         this.repository.save(new Physician("Richard", "Bucholz", "Neurology"));
         this.repository.save(new Physician("John (J.D)", "Dorian", "Scrubs"));
+        this.repository.save(new Physician("Perry", "Cox", "Scrubs"));
+        this.repository.save(new Physician("Christopher", "Turk", "Scrubs"));
     }
 
 }

@@ -1,8 +1,11 @@
 package com.example.hivemvp;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
+import javax.persistence.Version;
 import java.util.Objects;
 
 /*
@@ -17,6 +20,9 @@ public class Physician {
     private String firstName;
     private String lastName;
     private String specialty;
+    private @Version
+    @JsonIgnore
+    Long version;
 
     public Physician() {
     }
@@ -35,7 +41,8 @@ public class Physician {
         return Objects.equals(id, physician.id) &&
                 Objects.equals(firstName, physician.firstName) &&
                 Objects.equals(lastName, physician.lastName) &&
-                Objects.equals(specialty, physician.specialty);
+                Objects.equals(specialty, physician.specialty) &&
+                Objects.equals(version, physician.version);
     }
 
     @Override
@@ -45,12 +52,13 @@ public class Physician {
                 ", firstName='" + firstName + '\'' +
                 ", lastName='" + lastName + '\'' +
                 ", specialty='" + specialty + '\'' +
+                ", version='" + version +
                 '}';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, firstName, lastName, specialty);
+        return Objects.hash(id, firstName, lastName, specialty, version);
     }
 
     public Long getId() {
@@ -83,5 +91,13 @@ public class Physician {
 
     public void setSpecialty(String specialty) {
         this.specialty = specialty;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }
