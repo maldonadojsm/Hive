@@ -4,6 +4,7 @@ const React = require('react');
 const ReactDOM = require('react-dom');
 const when = require('when');
 const client = require('./client');
+const stompClient = require('./websocket-listener')
 
 const follow = require('./follow'); // function to hop multiple links by "rel"
 
@@ -19,6 +20,8 @@ class App extends React.Component {
         this.onUpdate = this.onUpdate.bind(this);
         this.onDelete = this.onDelete.bind(this);
         this.onNavigate = this.onNavigate.bind(this);
+        this.refreshCurrentPage = this.refreshCurrentPage.bind(this);
+        this.refreshAndGoToLastPage = this.refreshAndGoToLastPage.bind(this);
     }
 
     // tag::follow-2[]
@@ -58,23 +61,14 @@ class App extends React.Component {
 
     // tag::create[]
     onCreate(newPhysician) {
-        const self = this;
-        follow(client, root, ['physicians']).then(response => {
-            return client({
+        follow(client, root, ['physicians']).done(response => {
+            client({
                 method: 'POST',
                 path: response.entity._links.self.href,
                 entity: newPhysician,
                 headers: {'Content-Type': 'application/json'}
             })
-        }).then(response => {
-            return follow(client, root, [{rel: 'physicians', params: {'size': self.state.pageSize}}]);
-        }).done(response => {
-            if (typeof response.entity._links.last !== "undefined") {
-                this.onNavigate(response.entity._links.last.href);
-            } else {
-                this.onNavigate(response.entity._links.self.href);
-            }
-        });
+        })
     }
 
     // end::create[]
@@ -90,7 +84,9 @@ class App extends React.Component {
                 'If-Match': physician.headers.Etag
             }
         }).done(response => {
-            this.loadFromServer(this.state.pageSize);
+            /*
+            Websocket handler updates state
+             */
         }, response => {
             if (response.status.code === 412) {
                 alert('DENIED: Unable to update ' +
@@ -103,9 +99,7 @@ class App extends React.Component {
 
     // tag::delete[]
     onDelete(physician) {
-        client({method: 'DELETE', path: physician.entity._links.self.href}).done(response => {
-            this.loadFromServer(this.state.pageSize);
-        });
+        client({method: 'DELETE', path: physician.entity._links.self.href});
     }
 
     // end::delete[]
@@ -117,6 +111,7 @@ class App extends React.Component {
             path: navUri
         }).then(physicianCollection => {
             this.links = physicianCollection.entity._links;
+            this.page = physicianCollection.entity.page;
 
             return physicianCollection.entity._embedded.physicians.map(physician =>
                 client({
@@ -128,6 +123,7 @@ class App extends React.Component {
             return when.all(physicianPromises);
         }).done(physicians => {
             this.setState({
+                page: this.page,
                 physicians: physicians,
                 attributes: Object.keys(this.schema.properties),
                 pageSize: this.state.pageSize,
@@ -145,11 +141,56 @@ class App extends React.Component {
         }
     }
 
-    // end::update-page-size[]
+    refreshAndGoToLastPage(message) {
+        follow(client, root, [{
+            rel: 'physicians',
+            params: {size: this.state.pageSize}
+        }]).done(response => {
+            if (response.entity._links.last !== undefined) {
+                this.onNavigate(response.entity._links.last.href);
+            } else {
+                this.onNavigate(response.entity._links.self.href);
+            }
+        })
+    }
 
-    // tag::follow-1[]
+    refreshCurrentPage(message) {
+        follow(client, root, [{
+            rel: 'physicians',
+            params: {
+                size: this.state.pageSize,
+                page: this.state.page.number
+            }
+        }]).then(physicianCollection => {
+            this.links = physicianCollection.entity._links;
+            this.page = physicianCollection.entity.page;
+
+            return physicianCollection.entity._embedded.physicians.map(physician => {
+                return client({
+                    method: 'GET',
+                    path: physician._links.self.href
+                })
+            });
+        }).then(physicianPromises => {
+            return when.all(physicianPromises);
+        }).then(physicians => {
+            this.setState({
+                page: this.page,
+                physicians: physicians,
+                attributes: Object.keys(this.schema.properties),
+                pageSize: this.state.pageSize,
+                links: this.links
+            });
+        });
+    }
+
     componentDidMount() {
         this.loadFromServer(this.state.pageSize);
+        stompClient.register([
+            {route: '/topic/newPhysician', callback: this.refreshAndGoToLastPage},
+            {route: '/topic/updatePhysician', callback: this.refreshCurrentPage},
+            {route: '/topic/deletePhysician', callback: this.refreshCurrentPage}
+        ]);
     }
 
     // end::follow-1[]
