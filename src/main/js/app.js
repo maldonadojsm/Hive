@@ -14,7 +14,7 @@ class App extends React.Component {
 
     constructor(props) {
         super(props);
-        this.state = {physicians: [], attributes: [], pageSize: 2, links: {}};
+        this.state = {physicians: [], attributes: [], page: 1, pageSize: 2, links: {}};
         this.updatePageSize = this.updatePageSize.bind(this);
         this.onCreate = this.onCreate.bind(this);
         this.onUpdate = this.onUpdate.bind(this);
@@ -24,11 +24,10 @@ class App extends React.Component {
         this.refreshAndGoToLastPage = this.refreshAndGoToLastPage.bind(this);
     }
 
-    // tag::follow-2[]
     loadFromServer(pageSize) {
-        follow(client, root, [ // <1>
+        follow(client, root, [
             {rel: 'physicians', params: {size: pageSize}}]
-        ).then(physicianCollection => { // <2>
+        ).then(physicianCollection => {
             return client({
                 method: 'GET',
                 path: physicianCollection.entity._links.profile.href,
@@ -38,7 +37,7 @@ class App extends React.Component {
                 this.links = physicianCollection.entity._links;
                 return physicianCollection;
             });
-        }).then(physicianCollection => { // <3>
+        }).then(physicianCollection => {
             return physicianCollection.entity._embedded.physicians.map(physician =>
                 client({
                     method: 'GET',
@@ -57,9 +56,6 @@ class App extends React.Component {
         });
     }
 
-    // end::follow-2[]
-
-    // tag::create[]
     onCreate(newPhysician) {
         follow(client, root, ['physicians']).done(response => {
             client({
@@ -71,9 +67,6 @@ class App extends React.Component {
         })
     }
 
-    // end::create[]
-
-    // tag::update[]
     onUpdate(physician, updatePhysician) {
         client({
             method: 'PUT',
@@ -95,16 +88,10 @@ class App extends React.Component {
         });
     }
 
-    // end::update[]
-
-    // tag::delete[]
     onDelete(physician) {
         client({method: 'DELETE', path: physician.entity._links.self.href});
     }
 
-    // end::delete[]
-
-    // tag::navigate[]
     onNavigate(navUri) {
         client({
             method: 'GET',
@@ -132,9 +119,6 @@ class App extends React.Component {
         });
     }
 
-    // end::navigate[]
-
-    // tag::update-page-size[]
     updatePageSize(pageSize) {
         if (pageSize !== this.state.pageSize) {
             this.loadFromServer(pageSize);
@@ -193,8 +177,6 @@ class App extends React.Component {
         ]);
     }
 
-    // end::follow-1[]
-
     render() {
         return (
             <div>
@@ -212,7 +194,6 @@ class App extends React.Component {
     }
 }
 
-// tag::create-dialog[]
 class CreateDialog extends React.Component {
 
     constructor(props) {
@@ -310,10 +291,7 @@ class UpdateDialog extends React.Component {
         )
     }
 
-};
-
-// end::update-dialog[]
-
+}
 
 class PhysicianList extends React.Component {
 
@@ -326,7 +304,6 @@ class PhysicianList extends React.Component {
         this.handleInput = this.handleInput.bind(this);
     }
 
-    // tag::handle-page-size-updates[]
     handleInput(e) {
         e.preventDefault();
         const pageSize = ReactDOM.findDOMNode(this.refs.pageSize).value;
@@ -337,9 +314,6 @@ class PhysicianList extends React.Component {
         }
     }
 
-    // end::handle-page-size-updates[]
-
-    // tag::handle-nav[]
     handleNavFirst(e) {
         e.preventDefault();
         this.props.onNavigate(this.props.links.first.href);
@@ -360,8 +334,6 @@ class PhysicianList extends React.Component {
         this.props.onNavigate(this.props.links.last.href);
     }
 
-    // end::handle-nav[]
-    // tag::employee-list-render[]
     render() {
         const physicians = this.props.physicians.map(physician =>
             <Physician key={physician.entity._links.self.href}
@@ -406,8 +378,6 @@ class PhysicianList extends React.Component {
             </div>
         )
     }
-
-    // end::employee-list-render[]
 }
 
 // tag::employee[]
@@ -440,8 +410,6 @@ class Physician extends React.Component {
         )
     }
 }
-
-// end::employee[]
 
 ReactDOM.render(
     <App/>,
