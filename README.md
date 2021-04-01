@@ -1,2 +1,2 @@
 # Hive-MVP
-Hive MVP - Physician Collaborative Environment using Java Spring Boot and React
+Physician Collaborative Environment using Java Spring Boot and React
