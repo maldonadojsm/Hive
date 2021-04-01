@@ -2,10 +2,7 @@ package com.example.hivemvp;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.Version;
+import javax.persistence.*;
 import java.util.Objects;
 
 /*
@@ -24,13 +21,17 @@ public class Physician {
     @JsonIgnore
     Long version;
 
+    private @ManyToOne
+    Manager manager;
+
     public Physician() {
     }
 
-    public Physician(String firstName, String lastName, String specialty) {
+    public Physician(String firstName, String lastName, String specialty, Manager manager) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.specialty = specialty;
+        this.manager = manager;
     }
 
     @Override
@@ -42,7 +43,8 @@ public class Physician {
                 Objects.equals(firstName, physician.firstName) &&
                 Objects.equals(lastName, physician.lastName) &&
                 Objects.equals(specialty, physician.specialty) &&
-                Objects.equals(version, physician.version);
+                Objects.equals(version, physician.version) &&
+                Objects.equals(manager, physician.manager);
     }
 
     @Override
@@ -53,12 +55,13 @@ public class Physician {
                 ", lastName='" + lastName + '\'' +
                 ", specialty='" + specialty + '\'' +
                 ", version='" + version +
+                ", manager='" + manager +
                 '}';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, firstName, lastName, specialty, version);
+        return Objects.hash(id, firstName, lastName, specialty, version, manager);
     }
 
     public Long getId() {
@@ -99,5 +102,13 @@ public class Physician {
 
     public void setVersion(Long version) {
         this.version = version;
+    }
+
+    public Manager getManager() {
+        return manager;
+    }
+
+    public void setManager(Manager manager) {
+        this.manager = manager;
     }
 }
