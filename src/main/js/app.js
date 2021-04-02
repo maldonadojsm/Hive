@@ -4,9 +4,10 @@ const React = require('react');
 const ReactDOM = require('react-dom');
 const when = require('when');
 const client = require('./client');
-const stompClient = require('./websocket-listener')
 
 const follow = require('./follow'); // function to hop multiple links by "rel"
+
+const stompClient = require('./websocket-listener');
 
 const root = '/api';
 
@@ -14,7 +15,10 @@ class App extends React.Component {
 
     constructor(props) {
         super(props);
-        this.state = {physicians: [], attributes: [], page: 1, pageSize: 2, links: {}};
+        this.state = {
+            physicians: [], attributes: [], page: 1, pageSize: 2, links: {}
+            , loggedInManager: this.props.loggedInManager
+        };
         this.updatePageSize = this.updatePageSize.bind(this);
         this.onCreate = this.onCreate.bind(this);
         this.onUpdate = this.onUpdate.bind(this);
@@ -33,21 +37,38 @@ class App extends React.Component {
                 path: physicianCollection.entity._links.profile.href,
                 headers: {'Accept': 'application/schema+json'}
             }).then(schema => {
+                // tag::json-schema-filter[]
+                /**
+                 * Filter unneeded JSON Schema properties, like uri references and
+                 * subtypes ($ref).
+                 */
+                Object.keys(schema.entity.properties).forEach(function (property) {
+                    if (schema.entity.properties[property].hasOwnProperty('format') &&
+                        schema.entity.properties[property].format === 'uri') {
+                        delete schema.entity.properties[property];
+                    } else if (schema.entity.properties[property].hasOwnProperty('$ref')) {
+                        delete schema.entity.properties[property];
+                    }
+                });
+
                 this.schema = schema.entity;
                 this.links = physicianCollection.entity._links;
                 return physicianCollection;
+                // end::json-schema-filter[]
             });
         }).then(physicianCollection => {
+            this.page = physicianCollection.entity.page;
             return physicianCollection.entity._embedded.physicians.map(physician =>
                 client({
                     method: 'GET',
                     path: physician._links.self.href
                 })
             );
-        }).then(physicianPromises => { // <4>
+        }).then(physicianPromises => {
             return when.all(physicianPromises);
-        }).done(physicians => { // <5>
+        }).done(physicians => {
             this.setState({
+                page: this.page,
                 physicians: physicians,
                 attributes: Object.keys(this.schema.properties),
                 pageSize: pageSize,
@@ -56,6 +77,7 @@ class App extends React.Component {
         });
     }
 
+    // tag::on-create[]
     onCreate(newPhysician) {
         follow(client, root, ['physicians']).done(response => {
             client({
@@ -67,30 +89,53 @@ class App extends React.Component {
         })
     }
 
-    onUpdate(physician, updatePhysician) {
-        client({
-            method: 'PUT',
-            path: physician.entity._links.self.href,
-            entity: updatePhysician,
-            headers: {
-                'Content-Type': 'application/json',
-                'If-Match': physician.headers.Etag
-            }
-        }).done(response => {
-            /*
-            Websocket handler updates state
-             */
-        }, response => {
-            if (response.status.code === 412) {
-                alert('DENIED: Unable to update ' +
-                    physician.entity._links.self.href + '. Your copy is stale.');
-            }
-        });
+    // end::on-create[]
+
+    // tag::on-update[]
+    onUpdate(physician, updatedPhysician) {
+        if (physician.entity.manager === this.state.loggedInManager) {
+            updatedPhysician["manager"] = physician.entity.manager;
+            client({
+                method: 'PUT',
+                path: physician.entity._links.self.href,
+                entity: updatedPhysician,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'If-Match': physician.headers.Etag
+                }
+            }).done(response => {
+                /* Let the websocket handler update the state */
+            }, response => {
+                if (response.status.code === 403) {
+                    alert('ACCESS DENIED: You are not authorized to update ' +
+                        physician.entity._links.self.href);
+                }
+                if (response.status.code === 412) {
+                    alert('DENIED: Unable to update ' + physician.entity._links.self.href +
+                        '. Your copy is stale.');
+                }
+            });
+        } else {
+            alert("You are not authorized to update");
+        }
     }
 
+    // end::on-update[]
+
+    // tag::on-delete[]
     onDelete(physician) {
-        client({method: 'DELETE', path: physician.entity._links.self.href});
+        client({method: 'DELETE', path: physician.entity._links.self.href}
+        ).done(response => {/* let the websocket handle updating the UI */
+            },
+            response => {
+                if (response.status.code === 403) {
+                    alert('ACCESS DENIED: You are not authorized to delete ' +
+                        physician.entity._links.self.href);
+                }
+            });
     }
+
+    // end::on-delete[]
 
     onNavigate(navUri) {
         client({
@@ -125,6 +170,7 @@ class App extends React.Component {
         }
     }
 
+    // tag::websocket-handlers[]
     refreshAndGoToLastPage(message) {
         follow(client, root, [{
             rel: 'physicians',
@@ -168,6 +214,9 @@ class App extends React.Component {
         });
     }
 
+    // end::websocket-handlers[]
+
+    // tag::register-handlers[]
     componentDidMount() {
         this.loadFromServer(this.state.pageSize);
         stompClient.register([
@@ -177,18 +226,22 @@ class App extends React.Component {
         ]);
     }
 
+    // end::register-handlers[]
+
     render() {
         return (
             <div>
                 <CreateDialog attributes={this.state.attributes} onCreate={this.onCreate}/>
-                <PhysicianList physicians={this.state.physicians}
+                <PhysicianList page={this.state.page}
+                               physicians={this.state.physicians}
                                links={this.state.links}
                                pageSize={this.state.pageSize}
                                attributes={this.state.attributes}
                                onNavigate={this.onNavigate}
                                onUpdate={this.onUpdate}
                                onDelete={this.onDelete}
-                               updatePageSize={this.updatePageSize}/>
+                               updatePageSize={this.updatePageSize}
+                               loggedInManager={this.state.loggedInManager}/>
             </div>
         )
     }
@@ -241,9 +294,6 @@ class CreateDialog extends React.Component {
     }
 }
 
-// end::create-dialog[]
-
-// tag::update-dialog[]
 class UpdateDialog extends React.Component {
 
     constructor(props) {
@@ -272,23 +322,34 @@ class UpdateDialog extends React.Component {
 
         const dialogId = "updatePhysician-" + this.props.physician.entity._links.self.href;
 
-        return (
-            <div key={this.props.physician.entity._links.self.href}>
-                <a href={"#" + dialogId}>Update</a>
-                <div id={dialogId} className="modalDialog">
-                    <div>
-                        <a href="#" title="Close" className="close">X</a>
+        const isManagerCorrect = this.props.physician.entity.manager == this.props.loggedInManager;
 
-                        <h2>Update a physician</h2>
+        if (isManagerCorrect === false) {
+            return (
+                <div>
+                    <a>Not Your Physician</a>
+                </div>
+            )
+        } else {
+            return (
+                <div>
+                    <a href={"#" + dialogId}>Update</a>
 
-                        <form>
-                            {inputs}
-                            <button onClick={this.handleSubmit}>Update</button>
-                        </form>
+                    <div id={dialogId} className="modalDialog">
+                        <div>
+                            <a href="#" title="Close" className="close">X</a>
+
+                            <h2>Update an physician</h2>
+
+                            <form>
+                                {inputs}
+                                <button onClick={this.handleSubmit}>Update</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
-        )
+            )
+        }
     }
 
 }
@@ -335,12 +396,16 @@ class PhysicianList extends React.Component {
     }
 
     render() {
+        const pageInfo = this.props.page.hasOwnProperty("number") ?
+            <h3>Physicians - Page {this.props.page.number + 1} of {this.props.page.totalPages}</h3> : null;
+
         const physicians = this.props.physicians.map(physician =>
             <Physician key={physician.entity._links.self.href}
                        physician={physician}
                        attributes={this.props.attributes}
                        onUpdate={this.props.onUpdate}
-                       onDelete={this.props.onDelete}/>
+                       onDelete={this.props.onDelete}
+                       loggedInManager={this.props.loggedInManager}/>
         );
 
         const navLinks = [];
@@ -359,6 +424,7 @@ class PhysicianList extends React.Component {
 
         return (
             <div>
+                {pageInfo}
                 <input ref="pageSize" defaultValue={this.props.pageSize} onInput={this.handleInput}/>
                 <table>
                     <tbody>
@@ -366,6 +432,7 @@ class PhysicianList extends React.Component {
                         <th>First Name</th>
                         <th>Last Name</th>
                         <th>Specialty</th>
+                        <th>Manager</th>
                         <th></th>
                         <th></th>
                     </tr>
@@ -380,7 +447,7 @@ class PhysicianList extends React.Component {
     }
 }
 
-// tag::employee[]
+// tag::physician[]
 class Physician extends React.Component {
 
     constructor(props) {
@@ -398,10 +465,12 @@ class Physician extends React.Component {
                 <td>{this.props.physician.entity.firstName}</td>
                 <td>{this.props.physician.entity.lastName}</td>
                 <td>{this.props.physician.entity.specialty}</td>
+                <td>{this.props.physician.entity.manager} < /td>
                 <td>
                     <UpdateDialog physician={this.props.physician}
                                   attributes={this.props.attributes}
-                                  onUpdate={this.props.onUpdate}/>
+                                  onUpdate={this.props.onUpdate}
+                                  loggedInManager={this.props.loggedInManager}/>
                 </td>
                 <td>
                     <button onClick={this.handleDelete}>Delete</button>
@@ -411,7 +480,9 @@ class Physician extends React.Component {
     }
 }
 
+// end::physician[]
+
 ReactDOM.render(
-    <App/>,
+    <App loggedInManager={document.getElementById('managername').innerHTML}/>,
     document.getElementById('react')
 )
